@@ -319,7 +319,7 @@ ngx_http_hsjson_parse(ngx_http_request_t *r, ngx_http_hsjson_ctx_t *ctx) {
 			*(p++) = '"';
 			++ctx->out_len;
 
-		 	while ( *p_field != ',' && (u_char*)p_field != ctx->cf->fieldlist.data +ctx->cf->fieldlist.len-1 ) {	
+		 	while ( *p_field != ',' && (u_char*)p_field != ctx->cf->fieldlist.data +ctx->cf->fieldlist.len ) {	
 				
 				*(p++) = *(p_field++);
 				++ctx->out_len;			
