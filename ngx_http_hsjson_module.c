@@ -5,6 +5,7 @@
  * akalend@mail.ru
  *
  */
+#include <ctype.h>
 #include <ngx_core.h>
 #include <ngx_config.h>
 #include <ngx_http.h>
@@ -238,21 +239,74 @@ ngx_http_hsjson_open_index(ngx_http_request_t *r, ngx_http_hsjson_loc_conf_t  *l
 	return NGX_OK;
 }
 
+static ngx_int_t ngx_htoi(u_char *s)
+{
+	ngx_int_t value;
+	size_t c;
+
+	c = (s)[0];
+	if (isupper(c))
+		c = tolower(c);
+	value = (c >= '0' && c <= '9' ? c - '0' : c - 'a' + 10) * 16;
+
+	c = (s)[1];
+	if (isupper(c))
+		c = tolower(c);
+	value += c >= '0' && c <= '9' ? c - '0' : c - 'a' + 10;
+
+	return (value);
+}
+
+void ngx_urldecode(	ngx_str_t url, u_char* buf )  {
+
+	int len = url.len;
+
+	u_char *dest = buf;
+	u_char *data = url.data;
+
+	while (len--) {
+		if (*data == '+') {
+			*dest = ' ';
+		}
+		else if (*data == '%' && len >= 2 ) { // && isxdigit((int) *(data + 1)) 
+											  //&& isxdigit((int) *(data + 2))
+			*dest = (u_char) ngx_htoi(data + 1);
+
+			data += 2;
+			len -= 2;
+		} else {
+			*dest = *data;
+		}
+		data++;
+		dest++;
+	}
+	*dest = '\0';
+}
 
 static ngx_int_t
 ngx_http_hsjson_read_data(ngx_http_request_t *r, ngx_http_hsjson_loc_conf_t  *lcf, ngx_http_hsjson_ctx_t *ctx) {
 
 	char	buff[SMALL_BUFF_SIZE];	
-	
-	strncpy(buff, (char*)ctx->hs_request->data,ctx->hs_request->len);
-	*(buff+ctx->hs_request->len) = '\0';
-	
-	strncpy(buff+ctx->hs_request->len+1, (char*)lcf->hs_operation.data, lcf->hs_operation.len);
-	*(buff+ctx->hs_request->len+1+lcf->hs_operation.len) = '\0';
-		
-	int len = sprintf(ctx->buff, "0	%s	1	%s	%d\n", buff+ctx->hs_request->len+1, buff, (int)lcf->limit);
 
-//	ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "**** write to sock(%d): '%s'", len, ctx->buff);	
+	strncpy(buff, (char*)lcf->hs_operation.data, lcf->hs_operation.len);
+	*(buff+lcf->hs_operation.len) = '\0';
+			
+	u_char * url = ngx_pcalloc(r->pool, ctx->hs_request->len+1);
+	
+	ngx_str_t en_url = (ngx_str_t){
+		.len = ctx->hs_request->len,
+		.data = ctx->hs_request->data
+	};
+	
+	ngx_urldecode(en_url, url);
+	
+	ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "unescaped uri '%s'",url);
+
+	int len = sprintf(ctx->buff, "0	%s	1	%s	%d\n", buff, url, (int)lcf->limit);
+
+    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+                   "write to sock(%d): '%s'", len, ctx->buff);
 
 	len = write(ctx->sock, ctx->buff, len);
 	if (!len) {
@@ -416,7 +470,7 @@ ngx_http_hsjson_handler(ngx_http_request_t *r)
 		return rc;
 	}
 
-//	ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,"readed from sock\n%s", buff);
+	ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,"readed from sock\n%s", buff);
 //	ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,"handlersocket responce_len %d", ctx->response_len);
 
 
